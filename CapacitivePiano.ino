@@ -18,8 +18,6 @@ void setup()
     line[numPins] = 0;
 
     digitalWrite(LED_BUILTIN, 0);
-
-    
 } 
 
 void loop() 
