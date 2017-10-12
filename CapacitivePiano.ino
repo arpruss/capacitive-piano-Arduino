@@ -1,29 +1,37 @@
 #include <ADCTouch.h>
 
 #undef FAST_SAMPLING
+#undef MEDIUM_SAMPLING
 // slow mode: 224 micros per sample, 7 ms per scan of all buttons
 // fast mode: 40 micros per sample, 1.3 ms per scan of all buttons
 
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit)) // see http://yaab-arduino.blogspot.com/2015/02/fast-sampling-from-analog-input.html
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 
-int pins[] = {A0,A1,A2,A3,A4,A5,A6,A7};
-
-const uint8_t notes[] = {60, 62, 64, 65, 67, 69, 71, 72};
+#if defined(PIN_A12)
+int pins[] = {A0,A1,A2,A3,A4,A5,A6,A7}; // ,A8,A9,A10,A11,A12};
+#else
+int pins[] = {A0,A1,A2,A3,A4,A5};
+#endif
+//                       C   D   E   F   G   A   B   C   C#  D#  F#  G#  A#
+const uint8_t notes[] = {60, 62, 64, 65, 67, 69, 71, 72, 61, 63, 66, 68, 70};
 const int numPins = sizeof(pins)/sizeof(*pins);
 const uint8_t NOTE_ON = 0b10010000;
 const uint8_t NOTE_OFF = 0b10000000;
 int ref[numPins];
-uint8_t prev[8];
+uint8_t prev[numPins];
 
 void setup() 
 {
 #ifdef FAST_SAMPLING
-    sbi(ADCSRA, ADPS2);
-    cbi(ADCSRA, ADPS1);
-    cbi(ADCSRA, ADPS0);
-#endif    
-    
+   ADCSRA = (ADCSRA & ~0b111) | 0b100; // divide clock by 16
+#else
+#ifdef MEDIUM_SAMPLING
+   ADCSRA = (ADCSRA & ~0b111) | 0b110; // divide clock by 64
+#endif
+#endif
+// default: divide clock by 128
+
     Serial.begin(115200);
 
     pinMode(LED_BUILTIN , OUTPUT);
@@ -35,12 +43,11 @@ void setup()
     }
 
     digitalWrite(LED_BUILTIN, 0);
-/*
+
     uint32_t t = micros();
     ADCTouch.read(A0, 10000);
     t = micros() -t;
     Serial.println(t);
-*/
 } 
 
 void midiNote(uint8_t status, uint8_t note, uint8_t velocity) {
