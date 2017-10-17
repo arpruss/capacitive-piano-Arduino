@@ -1,18 +1,27 @@
-#include <ADCTouch.h>
+#include <ADCTouchSensor.h>
 
-#undef FAST_SAMPLING
-#undef MEDIUM_SAMPLING
-// slow mode: 224 micros per sample, 7 ms per scan of all buttons
-// fast mode: 40 micros per sample, 1.3 ms per scan of all buttons
+#ifdef DARDUINO_ARCH_AVR
+# define SLOW_SAMPLING
+# undef FAST_SAMPLING
+# undef MEDIUM_SAMPLING
+// slow mode: 9 ms per scan of 8 buttons
+// medium mode: 5 ms per scan of 8 buttons
+// fast mode: 2 ms per scan of 8 buttons
+#endif
 
-#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit)) // see http://yaab-arduino.blogspot.com/2015/02/fast-sampling-from-analog-input.html
-#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 
-#if defined(PIN_A12)
+#if defined(ARDUINO_ARCH_STM32F1) 
+int pins[] = {PA0,PA1,PA2,PA3,PA4,PA5,PA6,PA7};
+#define LED_BUILTIN PB12 // adjust to your board
+#define LED_OFF        1
+#elif defined(PIN_A12)
+#define LED_OFF        0
 int pins[] = {A0,A1,A2,A3,A4,A5,A6,A7}; // ,A8,A9,A10,A11,A12};
 #else
+#define LED_OFF        0
 int pins[] = {A0,A1,A2,A3,A4,A5};
 #endif
+
 //                       C   D   E   F   G   A   B   C   C#  D#  F#  G#  A#
 const uint8_t notes[] = {60, 62, 64, 65, 67, 69, 71, 72, 61, 63, 66, 68, 70};
 const int numPins = sizeof(pins)/sizeof(*pins);
@@ -20,9 +29,12 @@ const uint8_t NOTE_ON = 0b10010000;
 const uint8_t NOTE_OFF = 0b10000000;
 int ref[numPins];
 uint8_t prev[numPins];
+ADCTouchSensor* sensors[numPins];
 
 void setup() 
 {
+#if defined(ARDUINO_ARCH_AVR)
+// default: divide clock by 128
 #ifdef FAST_SAMPLING
    ADCSRA = (ADCSRA & ~0b111) | 0b100; // divide clock by 16
 #else
@@ -30,38 +42,48 @@ void setup()
    ADCSRA = (ADCSRA & ~0b111) | 0b110; // divide clock by 64
 #endif
 #endif
-// default: divide clock by 128
+#endif
 
+#ifndef USB_MIDI
     Serial.begin(115200);
+#endif    
 
-    pinMode(LED_BUILTIN , OUTPUT);
-    digitalWrite(LED_BUILTIN, 1);     
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, 1^LED_OFF);     
 
     for (int i=0; i<numPins; i++) {
-        ref[i] = ADCTouch.read(pins[i], 500);
+        sensors[i] = new ADCTouchSensor(pins[i]);
+        sensors[i]->begin();
         prev[i] = 0;
     }
 
-    digitalWrite(LED_BUILTIN, 0);
+    digitalWrite(LED_BUILTIN, 0^LED_OFF);
 
-    uint32_t t = micros();
-    ADCTouch.read(A0, 10000);
-    t = micros() -t;
-    Serial.println(t);
+//    uint32_t t = micros();
+//    ADCTouch.read(A0, 10000);
+//    t = micros() -t;
+//    Serial.println(t);
 } 
 
 void midiNote(uint8_t status, uint8_t note, uint8_t velocity) {
+#ifdef USB_MIDI
+  if (status == NOTE_ON)
+      MidiUSB.sendNoteOn(0, note, velocity);
+  else if (status == NOTE_OFF)
+      MidiUSB.sendNoteOff(0, note, velocity);    
+#else
   Serial.write(status);
   Serial.write(note);
   Serial.write(velocity);
+#endif
 }
 
 void loop() 
 {
     uint8_t pressed = 0;
-    
+
     for (int i=0; i<numPins; i++) {
-      if (ADCTouch.read(pins[i], 5) - ref[i] > 25) {
+      if (sensors[i]->read() > 25) {
          pressed = 1;
          if(!prev[i]) {
            midiNote(NOTE_ON, notes[i], 127);
@@ -75,6 +97,6 @@ void loop()
          }
       }
     }
-    digitalWrite(LED_BUILTIN, pressed);
+    digitalWrite(LED_BUILTIN, pressed^LED_OFF);
 }
 

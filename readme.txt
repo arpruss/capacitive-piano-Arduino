@@ -1,8 +1,8 @@
 Full instructions are here:
     https://www.instructables.com/id/Quick-Fruit-Piano/
 
-Requires the marti2250 no-component capacitive touch library:
-    https://github.com/martin2250/ADCTouch
+Requires the ADCTouchSensor no-component capacitive touch library:
+    https://github.com/arpruss/ADCTouchSensor
 
 Attach A0-A7 to pads, fruit, cans, etc. Turn on Arduino with sketch. Wait for the LED to turn off. Then run:
     python piano.py com-port
